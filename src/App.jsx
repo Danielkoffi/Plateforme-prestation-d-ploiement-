@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
+import Admin from "./Admin.jsx";import {
   ShoppingBag,
   Search,
   CheckCircle2,
@@ -103,7 +103,9 @@ function emptyForm() {
 }
 
 export default function App() {
-  const [page, setPage] = useState("home");
+  if (window.location.pathname === "/admin") {
+    return <Admin />;
+  }  const [page, setPage] = useState("home");
   const [mobileMenu, setMobileMenu] = useState(false);
 
   const [form, setForm] = useState(emptyForm);
