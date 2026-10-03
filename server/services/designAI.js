@@ -35,7 +35,7 @@ async function generateWithFallback(prompt) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openrouter/free",,
+        model: "openrouter/free",
         messages: [{ role: "user", content: prompt }],
       }),
     });
