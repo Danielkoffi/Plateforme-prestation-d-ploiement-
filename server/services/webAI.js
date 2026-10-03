@@ -13,7 +13,6 @@ async function generateWithFallback(prompt) {
   const modeles = [
     "gemini-3.8-flash",
     "gemini-2.5-flash",
-    "gemini-2.0-flash",
   ];
 
   let lastError = null;
