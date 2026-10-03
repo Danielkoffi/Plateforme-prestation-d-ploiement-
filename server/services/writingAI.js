@@ -1,0 +1,95 @@
+import { GoogleGenAI } from "@google/genai";
+import { v2 as cloudinary } from "cloudinary";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+async function generateWithFallback(prompt) {
+  // 1. Essayer Gemini
+  try {
+    console.log(`🤖 Tentative Gemini 3.8-flash...`);
+    const interaction = await ai.models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: prompt,
+    });
+    console.log(`✅ Gemini a réussi`);
+    return interaction.text;
+  } catch (error) {
+    const code = error?.code || error?.status;
+    console.warn(`⚠️ Gemini a échoué (${code}), bascule sur OpenRouter...`);
+  }
+
+  // 2. Fallback OpenRouter
+  try {
+    console.log(`🌐 Tentative OpenRouter (Llama 3.3)...`);
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "meta-llama/llama-3.3-70b-instruct:free",
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data?.choices?.[0]?.message?.content) {
+      throw new Error(data?.error?.message || "OpenRouter a échoué");
+    }
+
+    console.log(`✅ OpenRouter a réussi`);
+    return data.choices[0].message.content;
+  } catch (error) {
+    console.error(`❌ OpenRouter a échoué:`, error?.message);
+    throw new Error("Gemini ET OpenRouter ont échoué");
+  }
+}
+
+export async function generateWriting(order) {
+  const prompt = `
+Tu es un rédacteur professionnel francophone.
+Génère un contenu de haute qualité pour la demande suivante.
+
+Service : ${order.serviceTitle}
+Formule : ${order.packageName}
+Client : ${order.customerName}
+
+Demande du client :
+"""
+${order.description}
+"""
+
+Instructions :
+- Rédige en français impeccable
+- Structure claire (titres, paragraphes)
+- Adapté au type de prestation
+- Longueur cohérente avec la formule "${order.packageName}"
+- Retourne le texte final uniquement, sans explication autour
+`.trim();
+
+  const content = await generateWithFallback(prompt);
+
+  const buffer = Buffer.from(content, "utf-8");
+  const uploaded = await cloudinary.uploader.upload(
+    `data:text/plain;base64,${buffer.toString("base64")}`,
+    {
+      folder: `prestations/${order.orderNumber}`,
+      public_id: `contenu-${Date.now()}`,
+      resource_type: "raw",
+      format: "txt",
+    }
+  );
+
+  return {
+    deliveryUrl: uploaded.secure_url,
+    content,
+  };
+}
